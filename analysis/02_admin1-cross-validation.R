@@ -17,8 +17,8 @@ geo_file <- "data/Zambia/DHS/ZMGE71FL/"
 ir_file <- "data/Zambia/DHS/ZMIR71DT/ZMIR71FL.DTA"
 hiv_file <- "data/Zambia/DHS/ZMAR71DT/ZMAR71FL.DTA"
 
-source("~/prevalence-mapping-review/analysis/functions.R")
-setwd("~/prevalence-mapping-review/")
+
+source("analysis/functions.R")
 #INLA:::inla.binary.install()
 inla.setOption("num.threads", 16)
 # GADM POLYGON DATA ------------------------------------------------------------
