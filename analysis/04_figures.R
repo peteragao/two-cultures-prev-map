@@ -509,13 +509,9 @@ ggsave("results/figures/Zambia_adm1_vs_adm2_violins.png",
        width = 10, height = 8)
 
 
+
 #### CROSS-VALIDATION ####
 holdout_res <- readRDS("results/estimates/holdout_res.rds")
-holdout_res |>
-  group_by(method) |>
-  summarize(rmse = sqrt(mean((median - direct.est) ^ 2)) * 100,
-            mae = mean(abs(median - direct.est)) * 100,
-            cov = mean(lower < direct.est & upper > direct.est))
 holdout_res$method[holdout_res$method == "Area level model: BYM2"] <-
   "Fay-Herriot BYM2"
 holdout_res$method[holdout_res$method == "Binomial SPDE LGM"] <-
@@ -532,138 +528,32 @@ selected_methods <-
 holdout_res <- holdout_res |>
   filter(method %in% selected_methods) |>
   mutate(method = factor(method, levels = selected_methods)) |>
-  mutate(error = direct.est - median) 
-
-
-# logit(direct.est) is normally distributed with some mean and V_i
-# from model, we get modeled logit of risk 
+  mutate(error = direct.est - median)
 
 holdout_res |>
-  mutate(CV = sqrt(direct.est.var) / direct.est * 100) |>
-  filter(CV < 10) |>
+  mutate(CV = sqrt(direct.est.var) / direct.est * 100, 
+         logit_direct_est_var = sqrt(direct.est.var / direct.est^2 / (1-direct.est) ^2),
+         logit_upper = logit_mean + qnorm(.9) * sqrt(logit_direct_est_var + logit_var),
+         logit_lower = logit_mean - qnorm(.9) * sqrt(logit_direct_est_var + logit_var),) |>
   group_by(method) |>
-  summarize(rmse = sqrt(mean((median - direct.est) ^ 2)) * 100,
-            mae = mean(abs(median - direct.est)) * 100,
-            cov = mean(lower < direct.est & upper > direct.est),
+  summarize(rmse = sqrt(mean((SUMMER::logit(median) - SUMMER::logit(direct.est)) ^ 2)) * 100,
+            mae = mean(abs(SUMMER::logit(median) - SUMMER::logit(direct.est))) * 100,
+            cov = mean(logit_lower < SUMMER::logit(direct.est) &
+                         logit_upper > SUMMER::logit(direct.est)),
             log_cpo = mean(dnorm(SUMMER::logit(direct.est),
                                  mean = SUMMER::logit(median), 
-                                 sd = sqrt(direct.est.var / direct.est^2 / (1-direct.est) ^2), log = T)),
-            is = mean((upper - lower) + 
-                        2 / 0.2 * ifelse(direct.est < lower, lower - direct.est, 0) +
-                        2 / 0.2 * ifelse(direct.est > upper, direct.est - upper, 0))) |>
-  rename("Method" = method,
-         "RMSE (x 100)" = rmse,
-         "MAE (x 100)" = mae,
-         "80% Coverage" = cov,
-         "Mean log(CPO)" = log_cpo,
-         "Int. Score" = is)
-
-holdout_res |>
-  group_by(method) |>
-  summarize(rmse = sqrt(mean((median - direct.est) ^ 2)) * 100,
-            mae = mean(abs(median - direct.est)) * 100,
-            cov = mean(lower < direct.est & upper > direct.est),
-            log_cpo = mean(dnorm(SUMMER::logit(direct.est),
-                                 mean = SUMMER::logit(median), 
-                                 sd = sqrt(direct.est.var / direct.est^2 / (1-direct.est) ^2), log = T)),
-            is = mean((upper - lower) + 
-                        2 / 0.2 * ifelse(direct.est < lower, lower - direct.est, 0) +
-                        2 / 0.2 * ifelse(direct.est > upper, direct.est - upper, 0))) |>
+                                 sd = sqrt(logit_direct_est_var + logit_var), log = T)),
+            is = mean((logit_upper - logit_lower) + 
+                        2 / 0.2 * ifelse(logit_lower > SUMMER::logit(direct.est), logit_lower - SUMMER::logit(direct.est), 0) +
+                        2 / 0.2 * ifelse(logit_upper < SUMMER::logit(direct.est), SUMMER::logit(direct.est) - logit_upper, 0))) |>
   rename("Method" = method,
          "RMSE (x 100)" = rmse,
          "MAE (x 100)" = mae,
          "80% Coverage" = cov,
          "Mean log(CPO)" = log_cpo,
          "Int. Score" = is) |>
-  knitr::kable( format = "latex", booktabs = T, linesep = "", digits = 3) |>
+  knitr::kable( format = "latex", booktabs = T, linesep = "", digits = 2) |>
   writeLines(paste0("results/figures/Zambia_adm2_loocv_tbl.tex"))
-
-
-plot_sf <- holdout_res |> 
-  group_split(method) |>
-  map(function(x) poly_adm2 |>
-        left_join(x, by = "domain") |>
-        mutate(method = x$method[1])) |>
-  bind_rows()
-
-
-ggplot(plot_sf) + geom_sf(aes(fill = error)) +  facet_wrap(~method) + 
-  scale_fill_gradientn(
-    limits  = c(-.2, .2),
-    colours = c("tomato", "white", "dodgerblue"),
-    values  = c(0, .5, 1),
-  ) + 
-  theme_minimal() +
-  my_theme
-ggsave("results/figures/Zambia_adm2_loocv_map.png",
-       width = 12.5, height = 8)
-
-
-
-
-
-
-
-
-holdout_res <- readRDS("results/estimates/holdout_res_adm1.rds")
-holdout_res$method[holdout_res$method == "Area level model: BYM2"] <- "Fay-Herriot BYM2"
-selected_methods <- 
-  c("Direct",
-    "Fay-Herriot BYM2",
-    "Binomial BYM2",
-    "Betabinomial BYM2",
-    "Binomial GRF",
-    "Betabinomial GRF")
-
-
-holdout_res <- holdout_res |>
-  filter(method %in% selected_methods) |>
-  mutate(method = factor(method, levels = selected_methods)) |>
-  mutate(error = direct.est - median)
-holdout_res <- holdout_res |>
-  filter(method %in% selected_methods) |>
-  mutate(method = factor(method, levels = selected_methods)) |>
-  mutate(error = direct.est - median) 
-holdout_res |>
-  group_by(method) |>
-  summarize(rmse = sqrt(mean((median - direct.est) ^ 2)) * 100,
-            mae = mean(abs(median - direct.est)) * 100,
-            cov = mean(lower < direct.est & upper > direct.est)) |>
-  rename("Method" = method,
-         "RMSE (x 100)" = rmse,
-         "MAE (x 100)" = mae,
-         "50% Coverage" = cov) |>
-  knitr::kable( format = "latex", booktabs = T, linesep = "", digits = 3) |>
-  writeLines(paste0("results/figures/Zambia_adm1_loocv_tbl.tex"))
-
-plot_sf <- holdout_res |> 
-  group_split(method) |>
-  map(function(x) poly_adm1 |>
-        left_join(x, by = "domain") |>
-        mutate(method = x$method[1])) |>
-  bind_rows()
-
-
-ggplot(plot_sf) + geom_sf(aes(fill = error)) +  facet_wrap(~method) + 
-  scale_fill_gradientn(
-    limits  = c(-.1, .1),
-    colours = c("tomato", "white", "dodgerblue"),
-    values  = c(0, .5, 1),
-  ) + 
-  theme_minimal() +
-  my_theme
-ggsave("results/figures/Zambia_adm1_loocv_map.png",
-       width = 12.5, height = 8)
-
-
-holdout_res |> 
-  filter(method %in% c("Binomial BYM2", "Betabinomial BYM2", "Binomial GRF", "Betabinomial GRF")) |>
-  ggplot(aes(x = direct.est, y = median, color = method)) +
-  geom_point() +
-  geom_linerange(aes(ymin = lower, ymax = upper)) +
-  geom_abline(slope = 1) + 
-  facet_wrap(~method)
-
 #### COVARIATE MODELING COMPARISON ####
 adm1_est_table <- read.csv("results/estimates/adm1_est.csv")
 adm2_est_table <- read.csv("results/estimates/adm2_est.csv")
@@ -1092,5 +982,81 @@ for (i in 1:nrow(methods_grid)) {
   abline(0, 1)
 }
 dev.off()
+
+#### AGGREGATE ADMIN-2 AND COMPARE WITH ADMIN-1 ####
+
+pop_pix <- readRDS(paste0("data/Zambia/zmb_pix_tbl.rds"))
+adm2_to_adm1_prop <- pop_pix |> 
+  st_set_geometry(NULL) |>
+  group_by(admin1_name) |> 
+  mutate(admin1_f1549_pop = sum(svy_f1549_pop)) |>
+  ungroup() |>
+  group_by(admin2_name) |> 
+  mutate(admin2_f1549_pop_prop = sum(svy_f1549_pop) / admin1_f1549_pop) |>
+  ungroup() |>
+  select(admin1_name, admin2_name, admin2_f1549_pop_prop) |>
+  unique() 
+
+
+adm2_to_adm1_comp <- adm2_est_table |> 
+  left_join(adm2_to_adm1_prop, by = c("domain" = "admin2_name")) |>
+  group_by(admin1_name, method) |>
+  summarize(median = sum(median * admin2_f1549_pop_prop)) |>
+  ungroup() |>
+  rename(Admin2_agg_median = median, domain = admin1_name) |>
+  left_join(adm1_est_table |> 
+              filter(method == "Direct") |>
+              select(domain, median),
+            by = c("domain")) |>
+  rename(Direct = median) |>
+  filter(method != "Direct")
+pdf("results_noUR/figures/Zambia_adm2_aggregated_vs_adm1_direct.pdf",
+    width = 7, height = 9)
+ggplot(adm2_to_adm1_comp, aes(x = Direct, y = Admin2_agg_median, color = domain)) +
+  geom_point() + 
+  facet_wrap(~method, nrow = 3) +
+  geom_abline(slope = 1) + xlab("Direct estimate") + 
+  ylab("Aggregated model-based Admin-2 level estimates") +
+  theme_minimal(base_size = 24) +
+  theme(legend.position = "none")
+dev.off()
+
+adm2_to_adm1_comp |>
+  left_join(bbin_adm1_res$betabinomial.bym2.model.est |> select(domain, median) |> rename(bbin_bym2 = median)) |>
+  ggplot(aes(x = bbin_bym2, y = Admin2_agg_median, color = domain)) +
+  geom_point() + 
+  facet_wrap(~method) +
+  geom_abline(slope = 1) + xlab("Direct estimate") + 
+  ylab("Aggregated model-based Admin-2 level estimates") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+plot(bin_adm2_res$bym2.model.est$median, bin_noUR_adm2_res$bym2.model.est$median, pch = 16,
+     xlab = "Binomial BYM2", ylab = "Binomial BYM2 NO UR")
+abline(0, 1)
+
+
+adm2_to_adm1_comp_UR <- 
+  bind_rows(adm2_est_table,bin_noUR_adm2_res$bym2.model.est) |> 
+  left_join(adm2_to_adm1_prop, by = c("domain" = "admin2_name")) |>
+  group_by(admin1_name, method) |>
+  summarize(median = sum(median * admin2_f1549_pop_prop)) |>
+  ungroup() |>
+  rename(Admin2_agg_median = median, domain = admin1_name) |>
+  left_join(adm1_est_table |> 
+              filter(method == "Direct") |>
+              select(domain, median),
+            by = c("domain")) |>
+  rename(Direct = median) |>
+  filter(method %in% c("Binomial BYM2", "Binomial BYM2 No UR"))
+ggplot(adm2_to_adm1_comp_UR, aes(x = Direct, y = Admin2_agg_median, color = domain)) +
+  geom_point() + 
+  facet_wrap(~method, nrow = 1) +
+  geom_abline(slope = 1) + xlab("Direct estimate") + 
+  ylab("Aggregated model-based Admin-2 level estimates") +
+  theme_minimal(base_size = 24) +
+  theme(legend.position = "none")
+
 
 
