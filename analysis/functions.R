@@ -1,10 +1,27 @@
+#------------------------------------------------------------------------------#
 # functions.R
+# This                                                                          
+#
+# Input files:
+# Output files:
+# Reference: 
+#   - https://dhsprogram.com/data/Guide-to-DHS-Statistics/index.htm#t=HIV_Prevalence.htm%23Among_women_and_menbc-1&rhtocid=_17_1_0
+#------------------------------------------------------------------------------#
 # DATA PROCESSING --------------------------------------------------------------
 # extract covariates at a set of a points from raster file
-get_cov <- function(file, points, assign_na = T) {
+get_cov <- function(file, points, assign_na = T, standardize = T, l1p = F) {
   cov <- rast(file)
+  if (l1p) {
+    cov <- log1p(cov)
+  }
+  if (standardize) {
+    cov_mean <- global(cov, fun = "mean", na.rm = TRUE)[1, 1]
+    cov_sd <- global(cov, fun = "sd", na.rm = TRUE)[1, 1]
+    cov <- (cov - cov_mean)/ cov_sd
+  }
+
   # get covariate value at points
-  cov_pts <- extract(cov, points)
+  cov_pts <- terra::extract(cov, points)
   
   if (assign_na) {
     coarse_cov <- aggregate(cov, fact = 10)
@@ -860,7 +877,7 @@ smoothContLGM <- function(res.inla,
                              function(x) quantile(x, (1-level)/2, na.rm = T)),
                upper = apply(est.mat.sub, 1,
                              function(x) quantile(x, 1-(1-level)/2, na.rm = T)),
-               method = paste0(res.inla$.args$family, " SPDE LGM"))
+               method = paste0(res.inla$.args$family, " SPDE LGM")) 
   
   return(out)
 }
@@ -890,6 +907,7 @@ simulateFrame <- function(grid, easpa, easize) {
   return(sample_frame)
 }
 # PLOTTING FUNCTIONS --------------------------------------------------------
+
 compareEstimates <- function(x,
                              posterior.sample = NULL,
                              title = NULL) {
