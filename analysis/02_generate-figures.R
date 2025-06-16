@@ -103,6 +103,9 @@ X_pop <- X_pop |>
 adm1_alm_res <- readRDS("results/estimates/adm1_alm_res.rds")
 adm2_alm_res <- readRDS("results/estimates/adm2_alm_res.rds")
 
+adm1_cov_alm_res <- readRDS("results/estimates/adm1_cov_alm_res.rds")
+adm2_cov_alm_res <- readRDS("results/estimates/adm2_cov_alm_res.rds")
+
 bin_adm1_res <- readRDS("results/estimates/bin_adm1_res.rds")
 bin_adm2_res <- readRDS("results/estimates/bin_adm2_res.rds")
 
@@ -169,7 +172,8 @@ median_cl_size <- svy_dat |>
 
 model_summaries <- data.frame(
   Method = 
-    rep(c("Fay-Herriot BYM2",
+    rep(c("Fay-Herriot BYM2 No Cov.",
+          "Fay-Herriot BYM2",
           "Betabinomial BYM2 No Cov.",
           "Betabinomial BYM2",
           "Betabinomial GRF No Cov.",
@@ -177,6 +181,8 @@ model_summaries <- data.frame(
   `Interval Width` = 
     c(mean(adm1_alm_res$bym2.model.est$upper - 
              adm1_alm_res$bym2.model.est$lower),
+      mean(adm1_cov_alm_res$bym2.model.est$upper - 
+             adm1_cov_alm_res$bym2.model.est$lower),
       mean(bbin_no_cov_adm1_res$betabinomial.bym2.model.est$upper - 
              bbin_no_cov_adm1_res$betabinomial.bym2.model.est$lower),
       mean(bbin_adm1_res$betabinomial.bym2.model.est$upper - 
@@ -187,6 +193,8 @@ model_summaries <- data.frame(
              bbin_LGM_res$betabinomial.spde.lgm.est$lower),
       mean(adm2_alm_res$bym2.model.est$upper - 
              adm2_alm_res$bym2.model.est$lower),
+      mean(adm2_cov_alm_res$bym2.model.est$upper - 
+             adm2_cov_alm_res$bym2.model.est$lower),
       mean(bbin_no_cov_adm2_res$betabinomial.bym2.model.est$upper - 
              bbin_no_cov_adm2_res$betabinomial.bym2.model.est$lower),
       mean(bbin_adm2_res$betabinomial.bym2.model.est$upper - 
@@ -196,7 +204,7 @@ model_summaries <- data.frame(
       mean(bbin_LGM_res$betabinomial.spde.lgm.est.subdomain$upper - 
              bbin_LGM_res$betabinomial.spde.lgm.est.subdomain$lower)),
   Overdisp = 
-    c(NA, 
+    c(NA, NA,
       1 + (median_cl_size - 1) * 
         bbin_no_cov_adm1_res$betabinomial.bym2.model.fit$summary.hyperpar[1, 4],
       1 + (median_cl_size - 1) * 
@@ -205,7 +213,7 @@ model_summaries <- data.frame(
         bbin_LGM_no_cov_fit$summary.hyperpar[1, 4],
       1 + (median_cl_size - 1) * 
         bbin_LGM_fit$summary.hyperpar[1, 4],
-      NA, 
+      NA, NA,
       1 + (median_cl_size - 1) * 
         bbin_no_cov_adm2_res$betabinomial.bym2.model.fit$summary.hyperpar[1, 4],
       1 + (median_cl_size - 1) * 
@@ -216,11 +224,13 @@ model_summaries <- data.frame(
         bbin_LGM_fit$summary.hyperpar[1, 4]),
   `Spatial SD` = 
     c(1/sqrt(adm1_alm_res$bym2.model.fit$summary.hyperpar[1, 4]),
+      1/sqrt(adm1_cov_alm_res$bym2.model.fit$summary.hyperpar[1, 4]),
       1/sqrt(bbin_no_cov_adm1_res$betabinomial.bym2.model.fit$summary.hyperpar[2, 4]),
       1/sqrt(bbin_adm1_res$betabinomial.bym2.model.fit$summary.hyperpar[2, 4]),
       bbin_LGM_no_cov_fit$summary.hyperpar[3, 4],
       bbin_LGM_fit$summary.hyperpar[3, 4],
       1/sqrt(adm2_alm_res$bym2.model.fit$summary.hyperpar[1, 4]),
+      1/sqrt(adm2_cov_alm_res$bym2.model.fit$summary.hyperpar[1, 4]),
       1/sqrt(bbin_no_cov_adm2_res$betabinomial.bym2.model.fit$summary.hyperpar[2, 4]),
       1/sqrt(bbin_adm2_res$betabinomial.bym2.model.fit$summary.hyperpar[2, 4]),
       bbin_LGM_no_cov_fit$summary.hyperpar[3, 4],
@@ -228,10 +238,34 @@ model_summaries <- data.frame(
     )
 )
 
+# Update since the models have a mix of CI levels
+getCI <- function(x, CI = 0.95){quantile(x, 1 - (1 - CI)/2) - quantile(x, (1 - CI)/2)}
+# Admin1
+model_summaries[, 2] <- c(
+  mean(apply(adm1_alm_res$bym2.model.sample, 1, getCI)),
+  mean(apply(adm1_cov_alm_res$bym2.model.sample, 1, getCI)),
+  mean(apply(bbin_no_cov_adm1_res$betabinomial.bym2.model.sample, 1, getCI)),
+  mean(apply(bbin_adm1_res$betabinomial.bym2.model.sample, 1, getCI)),
+  mean(apply(bbin_LGM_no_cov_res$betabinomial.spde.lgm.sample, 1, getCI)),
+  mean(apply(bbin_LGM_res$betabinomial.spde.lgm.sample, 1, getCI)),
+
+  # Admin2,
+  mean(apply(adm2_alm_res$bym2.model.sample, 1, getCI)),
+  mean(apply(adm2_cov_alm_res$bym2.model.sample, 1, getCI)),
+  mean(apply(bbin_no_cov_adm2_res$betabinomial.bym2.model.sample, 1, getCI)),
+  mean(apply(bbin_adm2_res$betabinomial.bym2.model.sample, 1, getCI)),
+  mean(apply(bbin_LGM_no_cov_res$betabinomial.spde.lgm.sample.subdomain, 1, getCI)),
+  mean(apply(bbin_LGM_res$betabinomial.spde.lgm.sample.subdomain, 1, getCI))
+)
+
 model_summaries |>
   mutate(Interval.Width = Interval.Width * 100) |>
-  knitr::kable( format = "latex", booktabs = T, linesep = "", digits = 2) |>
-  writeLines(paste0("results/figures/zmb_hiv_model_summaries.tex"))
+  knitr::kable( format = "latex", booktabs = T, linesep = "", digits = 2) 
+  # |>
+  # writeLines(paste0("results/figures/zmb_hiv_model_summaries.tex"))
+
+
+
 #### ADMIN 1 ESTIMATES ####
 plot_sf <- poly_adm1 |>
   left_join(adm1_est_table, by = "domain")
@@ -307,6 +341,7 @@ selected_methods <-
     "Betabinomial GRF")
 adm1_holdout_res <- adm1_holdout_res |>
   filter(method %in% selected_methods) |>
+  mutate(method = factor(method, levels = selected_methods)) |>
   left_join(adm1_alm_res$direct.est |>
               select(domain, median, var) |>
               rename(direct.est = median, 
@@ -335,7 +370,7 @@ comp_table <- adm1_holdout_res |>
             cov = mean(cov),
             log_cpo = mean(log_cpo),
             is = mean(is),
-            int_length = mean(upper - lower))
+            int_length = mean(logit_upper - logit_lower))
 present_comp_table <- comp_table |>
   mutate(mae = round(mae * 100, 2),
          rmse = round(rmse * 100, 2),
@@ -354,6 +389,7 @@ for (holdout_name in poly_adm2$NAME_2) {
 adm2_holdout_res <- bind_rows(full_res_list)
 adm2_holdout_res <- adm2_holdout_res |>
   filter(method %in% selected_methods) |>
+  mutate(method = factor(method, levels = selected_methods)) |>
   left_join(adm2_alm_res$direct.est |>
               select(domain, median, var) |>
               rename(direct.est = median, 
@@ -379,7 +415,7 @@ comp_table <- adm2_holdout_res |>
             cov = mean(cov),
             log_cpo = mean(log_cpo),
             is = mean(is),
-            int_length = mean(upper - lower))
+            int_length = mean(logit_upper - logit_lower))
 present_comp_table <- comp_table |>
   mutate(mae = round(mae * 100, 2),
          rmse = round(rmse * 100, 2),
@@ -391,6 +427,10 @@ present_comp_table <- comp_table |>
 ggplot(adm2_holdout_res, aes(x = logit_direct_est, y = logit_mean, color = method)) + 
   geom_point()+
   facet_wrap(~method)
+ggplot(adm1_holdout_res, aes(x = logit_direct_est, y = logit_mean, color = method)) + 
+  geom_point()+
+  facet_wrap(~method) +
+  geom_abline(slope =1 )
 
 
 #### ******** APPENDIX ******** ####
@@ -479,16 +519,30 @@ adm1_alm_bym2_sample <-
           sd = sqrt(adm1_alm_res$bym2.model.est$var)),
     ncol = 250
   )
+adm1_cov_alm_bym2_sample <-
+  matrix(
+    rnorm(10*250, 
+          mean = adm1_cov_alm_res$bym2.model.est$mean, 
+          sd = sqrt(adm1_cov_alm_res$bym2.model.est$var)),
+    ncol = 250
+  )
 adm1_alm_iid_sample <- t(adm1_alm_iid_sample) %*% adm1_to_natl_prop$admin1_f1549_pop_prop
 adm1_alm_bym2_sample <- t(adm1_alm_bym2_sample) %*% adm1_to_natl_prop$admin1_f1549_pop_prop
+adm1_cov_alm_bym2_sample <- t(adm1_cov_alm_bym2_sample) %*% adm1_to_natl_prop$admin1_f1549_pop_prop
 bin_adm1_natl_sample <- 
   t(bin_adm1_res$bym2.model.sample)[, match(adm1_to_natl_prop$admin1_name, rownames(admin1_mat))] %*%
+  adm1_to_natl_prop$admin1_f1549_pop_prop 
+bbin_no_cov_adm1_natl_sample <- 
+  t(bbin_no_cov_adm1_res$betabinomial.bym2.model.sample)[, match(adm1_to_natl_prop$admin1_name, rownames(admin1_mat))] %*%
   adm1_to_natl_prop$admin1_f1549_pop_prop 
 bbin_adm1_natl_sample <- 
   t(bbin_adm1_res$betabinomial.bym2.model.sample)[, match(adm1_to_natl_prop$admin1_name, rownames(admin1_mat))] %*%
   adm1_to_natl_prop$admin1_f1549_pop_prop 
 bin_LGM_natl_sample <- 
   t(bin_LGM_res$binomial.spde.lgm.sample)[, match(adm1_to_natl_prop$admin1_name, rownames(admin1_mat))] %*%
+  adm1_to_natl_prop$admin1_f1549_pop_prop 
+bbin_LGM_no_cov_natl_sample <- 
+  t(bbin_LGM_no_cov_res$betabinomial.spde.lgm.sample)[, match(adm1_to_natl_prop$admin1_name, rownames(admin1_mat))] %*%
   adm1_to_natl_prop$admin1_f1549_pop_prop 
 bbin_LGM_natl_sample <- 
   t(bbin_LGM_res$betabinomial.spde.lgm.sample)[, match(adm1_to_natl_prop$admin1_name, rownames(admin1_mat))] %*%
@@ -497,30 +551,39 @@ bbin_LGM_natl_sample <-
 natl_comp <- data.frame(
   method =
     c("Direct (National)",
-      "Fay-Herriot IID",
+      # "Fay-Herriot IID",
+      "Fay-Herriot BYM2: No Cov.",
       "Fay-Herriot BYM2",
-      "Binomial BYM2",
+      # "Binomial BYM2",
+      "Betabinomial BYM2: No Cov.",
       "Betabinomial BYM2",
-      "Binomial GRF",
+      # "Binomial GRF",
+      "Betabinomial GRF: No Cov.",
       "Betabinomial GRF"),
   est = 
     c(
       svymean(~hiv, sample_des),
-      median(adm1_alm_iid_sample),
+      # median(adm1_alm_iid_sample),
       median(adm1_alm_bym2_sample),
-      median(bin_adm1_natl_sample),
+      median(adm1_cov_alm_bym2_sample),
+      # median(bin_adm1_natl_sample),
+      median(bbin_no_cov_adm1_natl_sample),
       median(bbin_adm1_natl_sample),
-      median(bin_LGM_natl_sample),
+      # median(bin_LGM_natl_sample),
+      median(bbin_LGM_no_cov_natl_sample),
       median(bbin_LGM_natl_sample)
     ),
   se = 
     c(
       sqrt(vcov(svymean(~hiv, sample_des))),
-      sd(adm1_alm_iid_sample),
+      # sd(adm1_alm_iid_sample),
       sd(adm1_alm_bym2_sample),
-      sd(bin_adm1_natl_sample),
+      sd(adm1_cov_alm_bym2_sample),
+      # sd(bin_adm1_natl_sample),
+      sd(bbin_no_cov_adm1_natl_sample),
       sd(bbin_adm1_natl_sample),
-      sd(bin_LGM_natl_sample),
+      # sd(bin_LGM_natl_sample),
+      sd(bbin_LGM_no_cov_natl_sample),
       sd(bbin_LGM_natl_sample)
     )
 ) |>
@@ -528,13 +591,16 @@ natl_comp <- data.frame(
          upper = est + qnorm(.975) * se) |>
   mutate(method =factor(method,
                         levels =   c("Direct (National)",
-                                     "Fay-Herriot IID",
+                                     # "Fay-Herriot IID",
+                                     "Fay-Herriot BYM2: No Cov.",
                                      "Fay-Herriot BYM2",
-                                     "Binomial BYM2",
+                                     # "Binomial BYM2",
+                                     "Betabinomial BYM2: No Cov.",
                                      "Betabinomial BYM2",
-                                     "Binomial GRF",
+                                     # "Binomial GRF",
+                                     "Betabinomial GRF: No Cov.",
                                      "Betabinomial GRF")))
-ggplot(natl_comp, aes(x = method, y = est, color = method == "Direct (National)")) +
+g <- ggplot(natl_comp, aes(x = method, y = est, color = method == "Direct (National)")) +
   geom_linerange(aes(x = method, ymin = lower, ymax = upper)) +
   geom_point() +
   xlab("National estimate") +
@@ -544,12 +610,12 @@ ggplot(natl_comp, aes(x = method, y = est, color = method == "Direct (National)"
   theme_minimal(base_size = 20) +
   ggplot2::theme(legend.position = "none",
                  axis.text.x = ggplot2::element_text(angle = 45, vjust = 1, hjust=1))
-ggsave(paste0("results/figures/Zambia_adm1_aggregated_vs_natl_direct.png"),
+ggsave(g, file = paste0("results/figures/Zambia_adm1_aggregated_vs_natl_direct.png"),
        width = 9, height = 7)
 
 #### ADMIN1 ESTIMATES TABLE ####
 out_table <- adm1_est_table |>
-  filter(!(method == "Fay-Herriot IID")) |>
+  filter(method %in% selected_methods) |>
   filter(complete.cases(median)) |>
   mutate(est = paste0(round(median, 2), " (", round(lower, 2),", ", round(upper, 2), ")")) |>
   dplyr::select(est, median, method, domain) |>
@@ -602,10 +668,21 @@ adm2_alm_bym2_sample <-
           sd = sqrt(adm2_alm_res$bym2.model.est$var)),
     ncol = 250
   )
+adm2_cov_alm_bym2_sample <-
+  matrix(
+    rnorm(115*250, 
+          mean = adm2_cov_alm_res$bym2.model.est$mean, 
+          sd = sqrt(adm2_cov_alm_res$bym2.model.est$var)),
+    ncol = 250
+  )
 adm2_alm_iid_sample <- t(adm2_alm_iid_sample) %*% adm2_to_natl_prop$admin2_f1549_pop_prop
 adm2_alm_bym2_sample <- t(adm2_alm_bym2_sample) %*% adm2_to_natl_prop$admin2_f1549_pop_prop
+adm2_cov_alm_bym2_sample <- t(adm2_cov_alm_bym2_sample) %*% adm2_to_natl_prop$admin2_f1549_pop_prop
 bin_adm2_natl_sample <- 
   t(bin_adm2_res$bym2.model.sample)[, match(adm2_to_natl_prop$admin2_name, rownames(admin2_mat))] %*%
+  adm2_to_natl_prop$admin2_f1549_pop_prop 
+bbin_no_cov_adm2_natl_sample <- 
+  t(bbin_no_cov_adm2_res$betabinomial.bym2.model.sample)[, match(adm2_to_natl_prop$admin2_name, rownames(admin2_mat))] %*%
   adm2_to_natl_prop$admin2_f1549_pop_prop 
 bbin_adm2_natl_sample <- 
   t(bbin_adm2_res$betabinomial.bym2.model.sample)[, match(adm2_to_natl_prop$admin2_name, rownames(admin2_mat))] %*%
@@ -620,42 +697,54 @@ bbin_LGM_natl_sample <-
 natl_comp <- data.frame(
   method =
     c("Direct (National)",
-      "Fay-Herriot IID",
+      # "Fay-Herriot IID",
+      "Fay-Herriot BYM2: No Cov.",
       "Fay-Herriot BYM2",
-      "Binomial BYM2",
+      # "Binomial BYM2",
+      "Betabinomial BYM2: No Cov.",
       "Betabinomial BYM2",
-      "Binomial GRF",
+      # "Binomial GRF",
+      "Betabinomial GRF: No Cov.",
       "Betabinomial GRF"),
   est = 
     c(
       svymean(~hiv, sample_des),
-      median(adm2_alm_iid_sample),
+      # median(adm1_alm_iid_sample),
       median(adm2_alm_bym2_sample),
-      median(bin_adm2_natl_sample),
+      median(adm2_cov_alm_bym2_sample),
+      # median(bin_adm1_natl_sample),
+      median(bbin_no_cov_adm2_natl_sample),
       median(bbin_adm2_natl_sample),
-      median(bin_LGM_natl_sample),
+      # median(bin_LGM_natl_sample),
+      median(bbin_LGM_no_cov_natl_sample),
       median(bbin_LGM_natl_sample)
     ),
   se = 
     c(
       sqrt(vcov(svymean(~hiv, sample_des))),
-      sd(adm2_alm_iid_sample),
+      # sd(adm1_alm_iid_sample),
       sd(adm2_alm_bym2_sample),
-      sd(bin_adm2_natl_sample),
+      sd(adm2_cov_alm_bym2_sample),
+      # sd(bin_adm1_natl_sample),
+      sd(bbin_no_cov_adm2_natl_sample),
       sd(bbin_adm2_natl_sample),
-      sd(bin_LGM_natl_sample),
+      # sd(bin_LGM_natl_sample),
+      sd(bbin_LGM_no_cov_natl_sample),
       sd(bbin_LGM_natl_sample)
     )
 ) |>
   mutate(lower = est - qnorm(.975) * se,
          upper = est + qnorm(.975) * se) |>
-  mutate(method =factor(method,
+    mutate(method =factor(method,
                         levels =   c("Direct (National)",
-                                     "Fay-Herriot IID",
+                                     # "Fay-Herriot IID",
+                                     "Fay-Herriot BYM2: No Cov.",
                                      "Fay-Herriot BYM2",
-                                     "Binomial BYM2",
+                                     # "Binomial BYM2",
+                                     "Betabinomial BYM2: No Cov.",
                                      "Betabinomial BYM2",
-                                     "Binomial GRF",
+                                     # "Binomial GRF",
+                                     "Betabinomial GRF: No Cov.",
                                      "Betabinomial GRF")))
 ggplot(natl_comp, aes(x = method, y = est, color = method == "Direct (National)")) +
   geom_linerange(aes(x = method, ymin = lower, ymax = upper)) +
@@ -673,7 +762,7 @@ ggsave(paste0("results/figures/Zambia_adm2_aggregated_vs_natl_direct.png"),
 #### ADMIN 2 ESTIMATES TABLE ####
 
 out_table <- adm2_est_table |>
-  filter(!(method == "Fay-Herriot IID")) |>
+  filter(method %in% selected_methods) |>
   filter(complete.cases(median)) |>
   mutate(est = paste0(round(median, 2), " (", round(lower, 2),", ", round(upper, 2), ")")) |>
   dplyr::select(est, median, method, domain) |>
@@ -690,7 +779,7 @@ out_table |>
   writeLines(paste0("results/figures/zmb_hiv_adm2_est_table.tex"))
 
 #### ******** ADDITIONAL FIGURES ******** ####
-
+#### ADDITIONAL MODEL PARAMETERS ####
 adm1_alm_res <- readRDS("results/estimates/adm1_alm_res.rds")
 adm2_alm_res <- readRDS("results/estimates/adm2_alm_res.rds")
 
@@ -704,9 +793,9 @@ bin_LGM_fit <- readRDS("results/estimates/bin_LGM_fit.rds")
 bbin_LGM_fit <- readRDS("results/estimates/bbin_LGM_fit.rds")
 
 unit_level_cov_adm1 <- bind_rows(
-  list("Binomial BYM2" = bin_adm1_res$bym2.model.fit$summary.fixed,
+  list("Betabinomial BYM2 No Cov." =  bbin_no_cov_adm1_res$betabinomial.bym2.model.fit$summary.fixed,
        "Betabinomial BYM2" =  bbin_adm1_res$betabinomial.bym2.model.fit$summary.fixed,
-       "Binomial GRF" = bin_LGM_fit$summary.fixed,
+       "Betabinomial GRF No Cov." = bbin_LGM_no_cov_fit$summary.fixed,
        "Betabinomial GRF" = bbin_LGM_fit$summary.fixed) |>
     map(function(x) tibble::rownames_to_column(x, "Variable")),
   .id = "method"
@@ -733,9 +822,9 @@ area_level_cov_adm1 <- bind_rows(
   writeLines(paste0("results/figures/zmb_hiv_adm1_area_cov.tex"))
 
 unit_level_cov_adm2 <- bind_rows(
-  list("Binomial BYM2" = bin_adm2_res$bym2.model.fit$summary.fixed,
+  list("Betabinomial BYM2 No Cov." =  bbin_no_cov_adm2_res$betabinomial.bym2.model.fit$summary.fixed,
        "Betabinomial BYM2" =  bbin_adm2_res$betabinomial.bym2.model.fit$summary.fixed,
-       "Binomial GRF" = bin_LGM_fit$summary.fixed,
+       "Betabinomial GRF No Cov." = bbin_LGM_no_cov_fit$summary.fixed,
        "Betabinomial GRF" = bbin_LGM_fit$summary.fixed) |>
     map(function(x) tibble::rownames_to_column(x, "Variable")),
   .id = "method"
@@ -763,11 +852,14 @@ area_level_cov_adm2 <- bind_rows(
 hyperpar_list <- list(
   "Fay-Herriot BYM2 Admin-1" = adm1_alm_res$bym2.model.fit$summary.hyperpar,
   "Fay-Herriot BYM2 Admin-2" = adm2_alm_res$bym2.model.fit$summary.hyperpar,
-  "Binomial BYM2 Admin-1" = bin_adm1_res$bym2.model.fit$summary.hyperpar,
+  
+  "Betabinomial BYM2 Admin-1 No Cov." = bbin_no_cov_adm1_res$betabinomial.bym2.model.fit$summary.hyperpar,
   "Betabinomial BYM2 Admin-1" = bbin_adm1_res$betabinomial.bym2.model.fit$summary.hyperpar,
-  "Binomial BYM2 Admin-2" = bin_adm2_res$bym2.model.fit$summary.hyperpar,
-  "Betabinomial BYM2 Admin-2" = bbin_adm2_res$betabinomial.bym2.model.fit$summary.hyperpar,
-  "Binomial GRF" = bin_LGM_fit$summary.hyperpar,
+  
+  "Betabinomial BYM2 Admin-2 No Cov." = bbin_adm2_res$betabinomial.bym2.model.fit$summary.hyperpar,
+  "Betabinomial BYM2 Admin-2" = bbin_no_cov_adm2_res$betabinomial.bym2.model.fit$summary.hyperpar,
+  
+  "Betabinomial GRF No Cov." = bbin_LGM_no_cov_fit$summary.hyperpar,
   "Betabinomial GRF" = bbin_LGM_fit$summary.hyperpar
 )
 
@@ -783,10 +875,7 @@ for (i in 1:length(hyperpar_list)) {
 }
 close(f)
 
-
-
-
-#### **** Admin-1 vs. Admin-2 Variability **** ####
+#### ADMIN 1 VS ADMIN 2 VARIABILITY ####
 combined_table <- bind_rows(adm1_est_table |> mutate(level = "Admin-1"),
                             adm2_est_table |> mutate(level = "Admin-2"))
 ggplot(combined_table, aes(x = median, y = level, color = method))+

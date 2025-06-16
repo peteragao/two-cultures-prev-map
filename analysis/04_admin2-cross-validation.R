@@ -144,7 +144,7 @@ for (i in 1:m) {
   res_list <- list()
   holdout_name <- holdout_direct_est$domain[i]
   
-  if (!file.exists(paste0("results/estimates/holdout_res_", holdout_name, ".rds"))) {
+  if (!file.exists(paste0("results/estimates/adm2_holdout/holdout_res_", holdout_name, ".rds"))) {
     
     cat("\nTake out region: ")
     cat(holdout_name, sep = "")
@@ -386,11 +386,46 @@ for (i in 1:m) {
       c(res_list,
         list(bbin_LGM_res$betabinomial.spde.lgm.est.subdomain[holdout_i, ]))
     
-    holdout_res <- bind_rows(res_list)
-    saveRDS(holdout_res, paste0("results/estimates/holdout_res_", holdout_name, ".rds"))
     
+    #### BETABINOMIAL SPDE NO COV ####
+    print("GRF MODELS")
+    bbin_LGM_no_cov_fit <- 
+      fitContLGM(formula = hiv ~ 1,
+                 family = "betabinomial",
+                 cluster = ~cluster,
+                 cluster.effect = F,
+                 data = holdout_dat,
+                 mesh = mesh,
+                 pc.prior.range = prior.range,
+                 pc.prior.sigma = prior.sigma,
+                 pc.prior.clust = prior.clust)
+    bbin_LGM_no_cov_res <- 
+      smoothContLGM(bbin_LGM_no_cov_fit,
+                    X.pop = X_pop_sf,
+                    domain = ~admin1_name + admin2_name,
+                    mesh,
+                    n.sample = 1000,
+                    cluster.effect = F,
+                    X.pop.weights = X_pop$adm2_pop_weight,
+                    level = .8,
+                    return.samples = T)
+    bbin_LGM_no_cov_res$betabinomial.spde.lgm.est.subdomain$method <- "Betabinomial GRF: No Cov."
+    holdout_i <- match(holdout_name,
+                       bbin_LGM_no_cov_res$betabinomial.spde.lgm.est.subdomain$domain)
+    spde_logit_samples <-
+      SUMMER::logit(bbin_LGM_no_cov_res$betabinomial.spde.lgm.sample.subdomain)
+    bbin_LGM_no_cov_res$betabinomial.spde.lgm.est.subdomain$logit_mean <- 
+      apply(spde_logit_samples, 1, mean)
+    bbin_LGM_no_cov_res$betabinomial.spde.lgm.est.subdomain$logit_var <- 
+      apply(spde_logit_samples, 1, var)
+    res_list <- 
+      c(res_list,
+        list(bbin_LGM_no_cov_res$betabinomial.spde.lgm.est.subdomain[holdout_i, ]))
+    
+    holdout_res <- bind_rows(res_list)
+    saveRDS(holdout_res, paste0("results/estimates/adm2_holdout/holdout_res_", holdout_name, ".rds"))
   } else {
-    holdout_res <- readRDS(paste0("results/estimates/holdout_res_", holdout_name, ".rds"))
+    holdout_res <- readRDS(paste0("results/estimates/adm2_holdout/holdout_res_", holdout_name, ".rds"))
   }
   full_res_list <- c(full_res_list, list(holdout_res))
 }
@@ -399,8 +434,8 @@ holdout_res <- bind_rows(full_res_list)
 
 full_res_list <- list()
 for (holdout_name in poly_adm2$NAME_2) {
-  if (file.exists(paste0("results/estimates/holdout_res_", holdout_name, ".rds"))) {
-    holdout_res <- readRDS(paste0("results/estimates/holdout_res_", holdout_name, ".rds"))
+  if (file.exists(paste0("results/estimates/adm2_holdout/holdout_res_", holdout_name, ".rds"))) {
+    holdout_res <- readRDS(paste0("results/estimates/adm2_holdout/holdout_res_", holdout_name, ".rds"))
     full_res_list <- c(full_res_list, list(holdout_res))
   }
 }
@@ -417,8 +452,8 @@ adm2_alm_res <- smoothArea(hiv~1, domain = ~admin2_name,
                            transform = "logit")
 holdout_res <- holdout_res |>
   left_join(adm2_alm_res$direct.est |>
-              select(domain, median, var) |>
-              rename(direct.est = median, 
+              select(domain, mean, var) |>
+              rename(direct.est = mean, 
                      direct.est.var = var),
             by = "domain") |>
   filter(!is.na(direct.est))
@@ -430,68 +465,119 @@ holdout_res <- holdout_res |>
          logit_lower = logit_mean - qnorm(.9) * sqrt(logit_direct_est_var + logit_var),
          sq_err = (median - direct.est)^2,
          abs_err = abs(median - direct.est),
+         logit_err = (logit_mean - logit_direct_est),
+         logit_scaled_err = (logit_mean - logit_direct_est) / sqrt(logit_direct_est_var + logit_var),
+         logit_scaled_err2 = (logit_mean - logit_direct_est) / sqrt(logit_direct_est_var),
          cov = logit_lower < logit_direct_est & logit_upper > logit_direct_est,
          log_cpo = dnorm(logit_direct_est, mean = logit_mean, sd = sqrt(logit_direct_est_var + logit_var), log = T),
          is = logit_upper - logit_lower + 
            2 / 0.2 * ifelse(logit_direct_est < logit_lower, logit_lower - logit_direct_est, 0) +
            2 / 0.2 * ifelse(logit_direct_est > logit_upper, logit_direct_est - logit_upper, 0))
-saveRDS(holdout_res, "results/estimates/holdout_res.rds")
-holdout_res <- readRDS("results/estimates/holdout_res.rds")
+saveRDS(holdout_res, "results/estimates/adm2_holdout_res.rds")
+holdout_res <- readRDS ("results/estimates/adm2_holdout_res.rds")
+
+
 
 comp_table <- holdout_res |>
   group_by(method) |>
-  summarize(mae = mean(abs_err),
-            rmse = sqrt(mean(sq_err)),
+  summarize(mae = (mean(abs(logit_err))),
+            rmse = sqrt(mean(logit_err^2)),
+            smae = (mean(abs(logit_scaled_err2))),
+            srmse = sqrt(mean(logit_scaled_err2^2)),
             cov = mean(cov),
             log_cpo = mean(log_cpo),
             is = mean(is),
             int_length = mean(upper - lower))
 
 present_comp_table <- comp_table |>
-  filter(method %in% c("Direct",
-                         "Binomial BYM2",
+  filter(method %in% c("Fay-Herriot BYM2: No cov.",
+                      # "Fay-Herriot BYM2",
+                         "Betabinomial BYM2: No cov.",
                          "Betabinomial BYM2",
-                         "Fay-Herriot BYM2",
-                         "Binomial GRF",
+                         "Betabinomial GRF: No cov.",
                          "Betabinomial GRF")) |>
-  mutate(mae = round(mae * 100, 2),
-         rmse = round(rmse * 100, 2),
+  mutate(
+         # mae = round(mae * 100, 2),
+         smae = round(smae , 3),
+         srmse = round(srmse , 3),
          cov = round(cov * 100),
-         log_cpo = round(log_cpo - max(log_cpo), 2),
-         is = round(is, 2),
-         int_length = round(int_length * 100, 2))
-holdout_res |>
-  filter(!stringr::str_detect(holdout_res$method, "No cov.")) |>
-  ggplot(aes(x = logit_direct_est, y = log_cpo, color = method)) + 
-  geom_point() + 
-  facet_wrap(~method) +
-  theme_bw() +
-  ggtitle(label = "Log(CPO) vs logit(direct estimate)", 
-          subtitle = "Large outliers for betabinomial models?")
-ggsave("results/figures/Zambia_adm2_cv_log_cpo_detailed.pdf", width = 11, height = 8)
-holdout_res |>
-  group_by(domain) |>
-  mutate(mean_log_cpo = mean(log_cpo)) |>
-  ungroup() |>
-  arrange(mean_log_cpo) |>
-  mutate(domain = factor(domain, levels = unique(domain))) |>
-  filter(!stringr::str_detect(holdout_res$method, "No cov.")) |>
-  filter(domain %in% unique(domain)[1:20]) |>
-  ggplot(aes(x = method, y = logit_mean, color = method)) +
-  geom_point() +
-  geom_hline(aes(yintercept = logit_direct_est)) + 
-  geom_hline(yintercept = logit(svymean(~hiv, sample_des)[1]), 
-             color = "red", linetype = "dashed") +
-  geom_linerange(aes(x = method, ymin = logit_lower, ymax = logit_upper)) +
-  facet_wrap(~domain) +
-  scale_x_discrete(labels = NULL, breaks = NULL) +
-  theme_bw() +
-  ggtitle(label = "20 Admin-2 areas with largest log(CPO) values", 
-          subtitle = "Red line is national mean, black line is Admin-2 direct estimate")
-ggsave("results/figures/Zambia_adm2_cv_detailed.pdf", width = 11, height = 8)
-holdout_res |> 
-  group_by(method) |> 
-  summarize(rmse = sqrt(mean((median -direct.est) ^ 2)),
-            mae = mean(abs(median - direct.est)),
-            cov = mean(lower < direct.est & upper > direct.est))
+         log_cpo = log_cpo, #round(log_cpo - max(log_cpo), 2),
+         is = round(is, 3),
+         int_length = round(int_length * 100, 3))
+
+toplot <- c("Fay-Herriot BYM2: No cov.",
+            # "Fay-Herriot BYM2",
+             "Betabinomial BYM2: No cov.",
+             "Betabinomial BYM2",
+             "Betabinomial GRF: No cov.",
+             "Betabinomial GRF")
+data.plot <- subset(holdout_res, method %in% toplot)
+data.plot$method <- factor(data.plot$method, levels = toplot)
+g <- ggplot(data.plot) + 
+  aes(x = logit_direct_est, y = logit_err) + 
+  geom_point() + facet_wrap(~method, ncol = 5) +
+  xlab("logit direct estimates") + ylab("difference")
+ggsave(g, file = "results/figures/ZMB_loo_err.pdf", width = 10, height = 4)
+
+g <- ggplot(data.plot) + 
+  aes(x = logit_direct_est, y = logit_scaled_err) + 
+  geom_point() + facet_wrap(~method, ncol = 5) +
+  xlab("logit direct estimates") + ylab("scaled difference")
+ggsave(g, file = "results/figures/ZMB_loo_scaled_err.pdf", width = 10, height = 4)
+
+g <- ggplot(data.plot) + 
+  aes(x = logit_direct_est, y = logit_scaled_err2) + 
+  geom_point() + facet_wrap(~method, ncol = 5) +
+  xlab("logit direct estimates") + ylab("scaled difference")
+ggsave(g, file = "results/figures/ZMB_loo_scaled_err2.pdf", width = 10, height = 4)
+
+# present_comp_table <- comp_table |>
+#   filter(method %in% c("Fay-Herriot BYM2",
+#                          "Betabinomial BYM2: No cov.",
+#                          "Betabinomial BYM2",
+#                          "Betabinomial GRF: No cov.",
+#                          "Betabinomial GRF")) |>
+#   mutate(mae = round(mae * 100, 2),
+#          logitmae = round(logitmae * 100, 2),
+#          rmse = round(rmse * 100, 2),
+#          cov = round(cov * 100),
+#          log_cpo = log_cpo,
+#          is = round(is, 2),
+#          int_length = round(int_length * 100, 2))
+
+
+# holdout_res |>
+#   filter(!stringr::str_detect(holdout_res$method, "No cov.")) |>
+#   ggplot(aes(x = logit_direct_est, y = log_cpo, color = method)) + 
+#   geom_point() + 
+#   facet_wrap(~method) +
+#   theme_bw() +
+#   ggtitle(label = "Log(CPO) vs logit(direct estimate)", 
+#           subtitle = "Large outliers for betabinomial models?")
+# ggsave("results/figures/Zambia_adm2_cv_log_cpo_detailed.pdf", width = 11, height = 8)
+# holdout_res |>
+#   group_by(domain) |>
+#   mutate(mean_log_cpo = mean(log_cpo)) |>
+#   ungroup() |>
+#   arrange(mean_log_cpo) |>
+#   mutate(domain = factor(domain, levels = unique(domain))) |>
+#   filter(!stringr::str_detect(holdout_res$method, "No cov.")) |>
+#   filter(domain %in% unique(domain)[1:20]) |>
+#   ggplot(aes(x = method, y = logit_mean, color = method)) +
+#   geom_point() +
+#   geom_hline(aes(yintercept = logit_direct_est)) + 
+#   geom_hline(yintercept = logit(svymean(~hiv, sample_des)[1]), 
+#              color = "red", linetype = "dashed") +
+#   geom_linerange(aes(x = method, ymin = logit_lower, ymax = logit_upper)) +
+#   facet_wrap(~domain) +
+#   scale_x_discrete(labels = NULL, breaks = NULL) +
+#   theme_bw() +
+#   ggtitle(label = "20 Admin-2 areas with largest log(CPO) values", 
+#           subtitle = "Red line is national mean, black line is Admin-2 direct estimate")
+# ggsave("results/figures/Zambia_adm2_cv_detailed.pdf", width = 11, height = 8)
+# holdout_res |> 
+#   group_by(method) |> 
+#   summarize(rmse = sqrt(mean((median -direct.est) ^ 2)),
+#             mae = mean(abs(median - direct.est)),
+#             cov = mean(lower < direct.est & upper > direct.est))
 

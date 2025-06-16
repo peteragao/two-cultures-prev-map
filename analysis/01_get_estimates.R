@@ -230,7 +230,15 @@ adm1_alm_res <- smoothArea(hiv ~ 1,
                            adj.mat = admin1_mat, 
                            transform = "logit", 
                            return.samples = T)
+adm1_cov_alm_res <- smoothArea(hiv ~ l1pntl_adm1 + access_adm1 + malaria_adm1,
+                           domain = ~admin1_name, 
+                           X.domain = X_adm1_avg,
+                           design = sample_des, 
+                           adj.mat = admin1_mat, 
+                           transform = "logit", 
+                           return.samples = T)
 saveRDS(adm1_alm_res, "results/estimates/adm1_alm_res.rds")
+saveRDS(adm1_cov_alm_res, "results/estimates/adm1_cov_alm_res.rds")
 #### AREA LEVEL ADMIN2 ####
 adm2_alm_res <- smoothArea(hiv ~ 1,
                            domain = ~admin2_name, 
@@ -239,7 +247,14 @@ adm2_alm_res <- smoothArea(hiv ~ 1,
                            adj.mat = admin2_mat, 
                            transform = "logit",
                            return.samples = T)
-saveRDS(adm2_alm_res, "results/estimates/adm2_alm_res.rds")
+adm2_cov_alm_res <- smoothArea(hiv ~ l1pntl_adm2 + access_adm2 + malaria_adm2,
+                           domain = ~admin2_name, 
+                           design = sample_des, 
+                           X.domain = X_adm2_avg,
+                           adj.mat = admin2_mat, 
+                           transform = "logit",
+                           return.samples = T)
+saveRDS(adm2_cov_alm_res, "results/estimates/adm2_cov_alm_res.rds")
 
 
 # BINOMIAL UNIT LEVEL MODELS ---------------------------------------------------

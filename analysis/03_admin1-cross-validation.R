@@ -139,7 +139,7 @@ for (i in 1:10) {
   cov_formula <- hiv ~ urban + l1pntl + access + malaria
   #### AREA LEVEL ####
   adm1_alm_res <- 
-    smoothArea(hiv ~ l1pntl_adm1 + access_adm1 + malaria_adm1,
+    smoothArea(hiv ~ 1,
                domain = ~admin1_name, 
                X.domain = X_adm1_avg,
                design = holdout_des, 
@@ -168,32 +168,6 @@ for (i in 1:10) {
       list(adm1_alm_res$iid.model.est[holdout_i, ]),
       list(adm1_alm_res$bym2.model.est[holdout_i, ]))
   
-  #### AREA LEVEL NO COVARIATES ####
-  adm1_alm_no_cov_res <- 
-    smoothArea(hiv~1, domain = ~admin1_name, 
-               design = holdout_des, 
-               adj.mat = admin1_mat, 
-               transform = "logit", 
-               level = .8,
-               return.samples = T)
-  iid_logit_samples <-
-    SUMMER::logit(adm1_alm_no_cov_res$iid.model.sample)
-  adm1_alm_no_cov_res$iid.model.est$logit_mean <- 
-    apply(iid_logit_samples, 1, mean)
-  adm1_alm_no_cov_res$iid.model.est$logit_var <- 
-    apply(iid_logit_samples, 1, var)
-  adm1_alm_no_cov_res$iid.model.est$method <- "Fay-Herriot IID: No cov."
-  bym2_logit_samples <-
-    SUMMER::logit(adm1_alm_no_cov_res$bym2.model.sample)[match(unique(adm1_est_table$domain), rownames(admin1_mat)), ]
-  adm1_alm_no_cov_res$bym2.model.est$logit_mean <- 
-    apply(bym2_logit_samples, 1, mean)
-  adm1_alm_no_cov_res$bym2.model.est$logit_var <- 
-    apply(bym2_logit_samples, 1, var)
-  adm1_alm_no_cov_res$bym2.model.est$method <- "Fay-Herriot BYM2: No cov."
-  res_list <- 
-    c(res_list,
-      list(adm1_alm_no_cov_res$iid.model.est[holdout_i, ]),
-      list(adm1_alm_no_cov_res$bym2.model.est[holdout_i, ]))
   
   #### BINOMIAL ####
   bin_adm1_res <-
@@ -405,9 +379,9 @@ saveRDS(holdout_res, "results/estimates/adm1_holdout_res.rds")
 
 
 holdout_res <- readRDS("results/estimates/adm1_holdout_res.rds")
-res_list <- list(holdout_res)
+res_list <- list(holdout_res |> filter(!(method %in% c("Fay-Herriot BYM2", "Fay-Herriot IID"))))
 for (i in 1:10) {
-  
+  holdout_i <- i
   holdout_name <- rownames(admin1_mat)[i]
   cat("\nTake out region: ")
   cat(i, " (", holdout_name, ")", sep = "")
@@ -419,39 +393,100 @@ for (i in 1:10) {
   holdout_des <- svydesign(id = ~cluster + hshold,
                            strata = ~stratum, nest = T,
                            weights = ~wt, data = holdout_dat)
-  #### BETABINOMIAL SPDE NO COV ####
-  print("GRF MODELS")
-  bbin_LGM_no_cov_fit <- 
-    fitContLGM(formula = hiv ~ urban,
-               family = "betabinomial",
-               cluster = ~cluster,
-               cluster.effect = F,
-               data = holdout_dat,
-               mesh = mesh,
-               pc.prior.range = prior.range,
-               pc.prior.sigma = prior.sigma,
-               pc.prior.clust = prior.clust)
-  bbin_LGM_no_cov_res <- 
-    smoothContLGM(bbin_LGM_no_cov_fit,
-                  X.pop = X_pop_sf,
-                  domain = ~admin1_name + admin2_name,
-                  mesh,
-                  n.sample = 1000,
-                  cluster.effect = F,
-                  X.pop.weights = X_pop$adm1_pop_weight,
-                  level = .8,
-                  return.samples = T)
-  bbin_LGM_no_cov_res$betabinomial.spde.lgm.est$method <- "Betabinomial GRF: No cov."
-  holdout_i <- match(holdout_name,
-                     bbin_LGM_no_cov_res$betabinomial.spde.lgm.est$domain)
-  spde_logit_samples <-
-    SUMMER::logit(bbin_LGM_no_cov_res$betabinomial.spde.lgm.sample)
-  bbin_LGM_no_cov_res$betabinomial.spde.lgm.est$logit_mean <- 
-    apply(spde_logit_samples, 1, mean)
-  bbin_LGM_no_cov_res$betabinomial.spde.lgm.est$logit_var <- 
-    apply(spde_logit_samples, 1, var)
+  #### AREA LEVEL NO COVARIATES ####
+  adm1_alm_no_cov_res <- 
+    smoothArea(hiv~1, domain = ~admin1_name, 
+               design = holdout_des, 
+               adj.mat = admin1_mat, 
+               transform = "logit", 
+               level = .8,
+               return.samples = T)
+  iid_logit_samples <-
+    SUMMER::logit(adm1_alm_no_cov_res$iid.model.sample)
+  adm1_alm_no_cov_res$iid.model.est$logit_mean <- 
+    apply(iid_logit_samples, 1, mean)
+  adm1_alm_no_cov_res$iid.model.est$logit_var <- 
+    apply(iid_logit_samples, 1, var)
+  adm1_alm_no_cov_res$iid.model.est$method <- "Fay-Herriot IID"
+  bym2_logit_samples <-
+    SUMMER::logit(adm1_alm_no_cov_res$bym2.model.sample)[match(unique(adm1_est_table$domain), rownames(admin1_mat)), ]
+  adm1_alm_no_cov_res$bym2.model.est$logit_mean <- 
+    apply(bym2_logit_samples, 1, mean)
+  adm1_alm_no_cov_res$bym2.model.est$logit_var <- 
+    apply(bym2_logit_samples, 1, var)
+  adm1_alm_no_cov_res$bym2.model.est$method <- "Fay-Herriot BYM2"
   res_list <- 
     c(res_list,
-      list(bbin_LGM_no_cov_res$betabinomial.spde.lgm.est[holdout_i, ]))
-  
+      list(adm1_alm_no_cov_res$iid.model.est[holdout_i, ]),
+      list(adm1_alm_no_cov_res$bym2.model.est[holdout_i, ]))
+
 }
+saveRDS(bind_rows(res_list), "results/estimates/adm1_holdout_res.rds")
+
+
+## -------------------------------------------------------------------------##
+holdout_res <- readRDS("results/estimates/adm1_holdout_res.rds")
+sample_des <- svydesign(id = ~cluster + hshold,
+                        strata = ~stratum, nest = T,
+                        weights = ~wt, data = svy_dat)
+adm1_alm_no_cov_res <- 
+    smoothArea(hiv~1, domain = ~admin1_name, 
+               design = sample_des, 
+               adj.mat = admin1_mat, 
+               transform = "logit", 
+               level = .8,
+               return.samples = T)
+holdout_res <- holdout_res |>
+  left_join(adm1_alm_no_cov_res$direct.est |>
+              select(domain, mean, var) |>
+              rename(direct.est = mean, 
+                     direct.est.var = var),
+            by = "domain") |>
+  filter(!is.na(direct.est))
+
+holdout_res <- holdout_res |>
+  mutate(logit_direct_est = SUMMER::logit(direct.est),
+         logit_direct_est_var = direct.est.var / direct.est^2 / (1-direct.est) ^2) |>
+  mutate(logit_upper = logit_mean + qnorm(.9) * sqrt(logit_direct_est_var + logit_var),
+         logit_lower = logit_mean - qnorm(.9) * sqrt(logit_direct_est_var + logit_var),
+         sq_err = (median - direct.est)^2,
+         abs_err = abs(median - direct.est),
+         logit_abs_err = abs(logit_mean - logit_direct_est),
+         logit_scaled_abs_err = abs(logit_mean - logit_direct_est) / sqrt(logit_direct_est_var + logit_var ),
+         logit_scaled_abs_err2 = abs(logit_mean - logit_direct_est) / sqrt(logit_direct_est_var ),
+         cov = logit_lower < logit_direct_est & logit_upper > logit_direct_est,
+         log_cpo = dnorm(logit_direct_est, mean = logit_mean, sd = sqrt(logit_direct_est_var + logit_var), log = T),
+         is = logit_upper - logit_lower + 
+           2 / 0.2 * ifelse(logit_direct_est < logit_lower, logit_lower - logit_direct_est, 0) +
+           2 / 0.2 * ifelse(logit_direct_est > logit_upper, logit_direct_est - logit_upper, 0))
+saveRDS(holdout_res, "results/estimates/adm1_holdout_res.rds")
+holdout_res <- readRDS ("results/estimates/adm1_holdout_res.rds")
+
+
+comp_table <- holdout_res |>
+  group_by(method) |>
+  summarize(mae = (mean(logit_abs_err)),
+            rmse = sqrt(mean(logit_abs_err^2)),
+            smae = (mean(logit_scaled_abs_err)),
+            srmse = sqrt(mean(logit_scaled_abs_err^2)),
+            smae2 = (mean(logit_scaled_abs_err2)),
+            srmse2 = sqrt(mean(logit_scaled_abs_err2^2)),
+            cov = mean(cov),
+            log_cpo = mean(log_cpo),
+            is = mean(is),
+            int_length = mean(upper - lower))
+
+present_comp_table <- comp_table |>
+  filter(method %in% c("Fay-Herriot BYM2",
+                         "Betabinomial BYM2: No cov.",
+                         "Betabinomial BYM2",
+                         "Betabinomial GRF: No cov.",
+                         "Betabinomial GRF")) |>
+  mutate(
+         # mae = round(mae * 100, 2),
+         smae = round(smae , 3),
+         srmse = round(srmse , 3),
+         cov = round(cov * 100),
+         log_cpo = log_cpo, #round(log_cpo - max(log_cpo), 2),
+         is = round(is, 3),
+         int_length = round(int_length * 100, 3))
